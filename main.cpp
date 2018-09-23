@@ -23,6 +23,8 @@ Mat camera_matrix, distortion_coefficients;
 bool contour_detected = false;
 cv::VideoCapture capture;
 
+Mat DealFrame(const Mat &);
+
 void ShowFrame(string title, const Mat &frame, cv::Size size = cv::Size(1280, 720)) {
     Mat resized;
     cv::resize(frame, resized, size);
@@ -36,7 +38,8 @@ void Init(int argc, char **argv) {
     desc.add_options()
         ("help", "produce help message")
         ("index", po::value<int>(), "set camera index")
-        ("config", po::value<string>(), "set calibration configuration file path");
+        ("config", po::value<string>(), "set calibration configuration file path")
+        ("pic", po::value<string>(), "set static picture as input");
     try {
         po::variables_map vm;
         po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -44,6 +47,17 @@ void Init(int argc, char **argv) {
         if (vm.count("help")) {
             std::cout << desc << std::endl;
             exit(1);
+        }
+        if (vm.count("pic")) {
+            string pic_path = vm["pic"].as<string>();
+            Mat image = cv::imread(pic_path);
+            if (image.empty()) {
+                std::cout << "image path isn't setted properly" << std::endl;
+                exit(1);
+            }
+            ShowFrame("Detection", DealFrame(image));
+            cv::waitKey(0);
+            exit(0);
         }
         if (vm.count("index")) {
             int camera_index = vm["index"].as<int>();
@@ -110,9 +124,10 @@ Mat DealFrame(const Mat &frame) {
     vector<cv::Vec4i> hierarchy;
     cvtColor(ans, ans, cv::COLOR_BGR2GRAY);
     auto kernal = getStructuringElement(cv::MORPH_RECT, cv::Size(10, 10));
+    int frame_area = frame.size().width * frame.size().height;
     dilate(ans, ans, kernal);
 
-    threshold(ans, ans, 40, 255, cv::THRESH_BINARY);
+    threshold(ans, ans, 120, 255, cv::THRESH_BINARY);
     findContours(ans, contours, hierarchy, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
     contour_detected = contours.size() >= 1;
     cvtColor(ans, ans, cv::COLOR_GRAY2BGR);
@@ -130,9 +145,11 @@ Mat DealFrame(const Mat &frame) {
         });
         contours = new_contours;
         new_contours.clear();
-        std::copy_if(contours.begin(), contours.end(), std::back_inserter(new_contours), [] (const std::vector<Point> &contour) {
+        std::copy_if(contours.begin(), contours.end(), std::back_inserter(new_contours), [&] (const std::vector<Point> &contour) {
+            static constexpr double minimum = 0.1, maximum = 0.5;
             double area = ConvexArea(contour);
-            return 100000 <= area && area <= 300000;
+            bool res = minimum * frame_area <= area && area <= maximum * frame_area;
+            return res;
         });
         contours = new_contours;
     }
