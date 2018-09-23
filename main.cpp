@@ -153,7 +153,24 @@ Mat DealFrame(const Mat &frame) {
         });
         contours = new_contours;
     }
-    for (const vector<Point> &contour: contours) {
+    if (contours.size() == 0) {
+        std::cout << "Contour not detected" << std::endl;
+        return ans;
+    }
+    vector<Point> contour;
+    {
+        auto max_contour = contours[0];
+        double max_area = ConvexArea(max_contour);
+        for (int i = 1; i < contours.size(); i++) {
+            auto contour = contours[i];
+            double area = ConvexArea(contour);
+            if (area <= max_area) continue;
+            max_contour = contour;
+            max_area = area;
+        }
+        contour = max_contour;
+    }
+    {
         int min_x = INT_MAX, min_y = INT_MAX, max_x = 0, max_y = 0;
         polylines(ans, contour, true, cv::Scalar(255, 0, 0));
         for (const Point &point: contour) {
@@ -165,7 +182,6 @@ Mat DealFrame(const Mat &frame) {
         cv::rectangle(ans, Point(min_x, min_y), Point(max_x, max_y), cv::Scalar(0, 255, 0));
         cv::drawMarker(ans, Point((min_x + max_x) / 2, (min_y + max_y) / 2), cv::Scalar(0, 0, 255));
     }
-    std::cerr << format("[contours.size() = %d]") % contours.size() << std::endl;
     return ans;
 }
 
